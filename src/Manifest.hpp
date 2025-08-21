@@ -66,7 +66,8 @@ struct Package {
   static Result<Package> tryFromToml(const toml::value& val) noexcept;
 
 private:
-  Package(std::string name, Edition edition, Version version, bool modules = false) noexcept
+  Package(std::string name, Edition edition, Version version,
+          bool modules = false) noexcept
       : name(std::move(name)), edition(std::move(edition)),
         version(std::move(version)), modules(modules) {}
 };

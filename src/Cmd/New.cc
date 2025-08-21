@@ -9,9 +9,9 @@
 #include "Rustify/Result.hpp"
 
 #include <cstdlib>
-#include <fstream>
 #include <fmt/core.h>
 #include <fmt/format.h>
+#include <fstream>
 #include <spdlog/spdlog.h>
 #include <string>
 #include <string_view>
@@ -47,8 +47,7 @@ static std::string getAuthor() noexcept {
   try {
     git2::Config config = git2::Config();
     config.openDefault();
-    return fmt::format("{} <{}>", 
-                       config.getString("user.name"), 
+    return fmt::format("{} <{}>", config.getString("user.name"),
                        config.getString("user.email"));
   } catch (const git2::Exception& e) {
     spdlog::debug("{}", e.what());
@@ -56,41 +55,32 @@ static std::string getAuthor() noexcept {
   }
 }
 
-std::string createCabinToml(const std::string_view projectName, const bool useModules) noexcept {
-  return fmt::format(
-    "[package]\n"
-    "name = \"{}\"\n"
-    "version = \"0.1.0\"\n"
-    "authors = [\"{}\"]\n"
-    "edition = \"23\"\n{}", 
-    projectName, 
-    getAuthor(),
-    useModules ? "modules = true\n" : ""
-  );
+std::string createCabinToml(const std::string_view projectName,
+                            const bool useModules) noexcept {
+  return fmt::format("[package]\n"
+                     "name = \"{}\"\n"
+                     "version = \"0.1.0\"\n"
+                     "authors = [\"{}\"]\n"
+                     "edition = \"23\"\n{}",
+                     projectName, getAuthor(),
+                     useModules ? "modules = true\n" : "");
 }
 
 static std::string getHeader(const std::string_view projectName) noexcept {
   const std::string projectNameUpper = toMacroName(projectName);
-  return fmt::format(
-    "#ifndef {}_HPP\n"
-    "#define {}_HPP\n\n"
-    "namespace {} {{\n}}\n\n"
-    "#endif  // !{}_HPP\n",
-    projectNameUpper,
-    projectNameUpper,
-    projectName,
-    projectNameUpper
-  );
+  return fmt::format("#ifndef {}_HPP\n"
+                     "#define {}_HPP\n\n"
+                     "namespace {} {{\n}}\n\n"
+                     "#endif  // !{}_HPP\n",
+                     projectNameUpper, projectNameUpper, projectName,
+                     projectNameUpper);
 }
 
 static std::string
 getModuleInterface(const std::string_view projectName) noexcept {
-  return fmt::format(
-    "export module {};\n\n"
-    "export namespace {} {{\n}}\n",
-    projectName,
-    projectName
-  );
+  return fmt::format("export module {};\n\n"
+                     "export namespace {} {{\n}}\n",
+                     projectName, projectName);
 }
 
 static Result<void> writeToFile(std::ofstream& ofs, const fs::path& fpath,
