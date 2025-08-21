@@ -296,12 +296,25 @@ Result<std::string> BuildConfig::runMM(const std::string& sourceFile,
 static std::unordered_set<std::string>
 parseMMOutput(const std::string& mmOutput, std::string& target) {
   std::istringstream iss(mmOutput);
-  std::getline(iss, target, ':');
-
-  std::string dependency;
+  std::string line;
   std::unordered_set<std::string> deps;
+  
+  std::vector<std::string> lines;
+  while (std::getline(iss, line)) {
+    lines.push_back(line);
+  }
+  
+  if (lines.empty()) {
+    return deps;
+  }
+  
+  const std::string& firstLine = lines[0];
+  std::istringstream lineStream(firstLine);
+  std::getline(lineStream, target, ':');
+  
+  std::string dependency;
   bool isFirst = true;
-  while (std::getline(iss, dependency, ' ')) {
+  while (std::getline(lineStream, dependency, ' ')) {
     if (!dependency.empty() && dependency.front() != '\\') {
       // Remove trailing newline if it exists
       if (dependency.back() == '\n') {
@@ -313,9 +326,12 @@ parseMMOutput(const std::string& mmOutput, std::string& target) {
         isFirst = false;
         continue;
       }
-      deps.insert(dependency);
+      if (dependency.find(".c++-module") == std::string::npos) {
+        deps.insert(dependency);
+      }
     }
   }
+  
   return deps;
 }
 
@@ -375,7 +391,13 @@ void BuildConfig::defineCompileTarget(
     commands.back() += " -DCABIN_TEST";
   }
   commands.back() += " -c $< -o $@";
-  defineTarget(objTarget, commands, remDeps, sourceFile);
+  
+  std::unordered_set<std::string> allDeps = remDeps;
+  if (project.manifest.package.modules) {
+    allDeps.insert("std-module");
+  }
+  
+  defineTarget(objTarget, commands, allDeps, sourceFile);
 }
 
 void BuildConfig::defineOutputTarget(
@@ -656,6 +678,11 @@ Result<void> BuildConfig::configureBuild() {
 
   setVariables();
 
+  // Add standard library module support if modules are enabled
+  if (project.manifest.package.modules) {
+    Try(configureModuleSupport());
+  }
+
   std::unordered_set<std::string> all = {};
   if (hasBinaryTarget) {
     all.insert(project.manifest.package.name);
@@ -749,6 +776,41 @@ Result<void> BuildConfig::configureBuild() {
 void BuildConfig::enableCoverage() {
   project.compilerOpts.cFlags.others.emplace_back("--coverage");
   project.compilerOpts.ldFlags.others.emplace_back("--coverage");
+}
+
+Result<void> BuildConfig::configureModuleSupport() {
+  const std::string& cxx = compiler.cxx;
+  bool isGcc = cxx.find("gcc") != std::string::npos || cxx.find("g++") != std::string::npos;
+  bool isClang = cxx.find("clang") != std::string::npos;
+  
+  if (isGcc) {
+    const std::string stdModulePath = (project.buildOutPath / "gcm.cache" / "std.gcm").string();
+    const std::string gcmCacheDir = (project.buildOutPath / "gcm.cache").string();
+    
+    defineTarget(gcmCacheDir, {"@mkdir -p " + gcmCacheDir}, {});
+    
+    defineTarget(stdModulePath, 
+                 {"$(CXX) $(CXXFLAGS) -fsearch-include-path -c bits/std.cc -o " + stdModulePath},
+                 {gcmCacheDir});
+    
+    addPhony("std-module");
+    defineTarget("std-module", {}, {stdModulePath});
+    
+  } else if (isClang) {
+    const std::string stdPcmPath = (project.buildOutPath / "std.pcm").string();
+    
+    defineTarget(stdPcmPath,
+                 {"$(CXX) $(CXXFLAGS) -stdlib=libc++ --precompile -o " + stdPcmPath + " /usr/lib/clang/*/include/c++/v1/std.cppm || echo 'Warning: std.cppm not found, module support may be limited'"},
+                 {});
+    
+    project.compilerOpts.cFlags.others.emplace_back("-fmodule-file=std=" + stdPcmPath);
+    project.compilerOpts.cFlags.others.emplace_back("-stdlib=libc++");
+    
+    addPhony("std-module");
+    defineTarget("std-module", {}, {stdPcmPath});
+  }
+  
+  return Ok();
 }
 
 Result<BuildConfig> emitMakefile(const Manifest& manifest,

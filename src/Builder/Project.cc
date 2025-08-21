@@ -92,6 +92,10 @@ Project::Project(const BuildProfile& buildProfile, Manifest m,
     compilerOpts.cFlags.others.emplace_back("-fdiagnostics-color");
   }
 
+  if (manifest.package.modules) {
+    compilerOpts.cFlags.others.emplace_back("-fmodules");
+  }
+
   const Profile& profile = manifest.profiles.at(buildProfile);
   if (profile.debug) {
     compilerOpts.cFlags.others.emplace_back("-g");

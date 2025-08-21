@@ -10,6 +10,8 @@
 
 #include <cstdlib>
 #include <fstream>
+#include <fmt/core.h>
+#include <fmt/format.h>
 #include <spdlog/spdlog.h>
 #include <string>
 #include <string_view>
@@ -45,51 +47,50 @@ static std::string getAuthor() noexcept {
   try {
     git2::Config config = git2::Config();
     config.openDefault();
-    return config.getString("user.name") + " <" + config.getString("user.email")
-           + ">";
+    return fmt::format("{} <{}>", 
+                       config.getString("user.name"), 
+                       config.getString("user.email"));
   } catch (const git2::Exception& e) {
     spdlog::debug("{}", e.what());
     return "";
   }
 }
 
-std::string createCabinToml(const std::string_view projectName) noexcept {
-  std::string cabinToml = "[package]\n"
-                          "name = \"";
-  cabinToml += projectName;
-  cabinToml += "\"\n"
-               "version = \"0.1.0\"\n"
-               "authors = [\"";
-  cabinToml += getAuthor();
-  cabinToml += "\"]\n"
-               "edition = \"20\"\n";
-  return cabinToml;
+std::string createCabinToml(const std::string_view projectName, const bool useModules) noexcept {
+  return fmt::format(
+    "[package]\n"
+    "name = \"{}\"\n"
+    "version = \"0.1.0\"\n"
+    "authors = [\"{}\"]\n"
+    "edition = \"23\"\n{}", 
+    projectName, 
+    getAuthor(),
+    useModules ? "modules = true\n" : ""
+  );
 }
 
 static std::string getHeader(const std::string_view projectName) noexcept {
   const std::string projectNameUpper = toMacroName(projectName);
-  std::string header = "#ifndef " + projectNameUpper
-                       + "_HPP\n"
-                         "#define "
-                       + projectNameUpper
-                       + "_HPP\n\n"
-                         "namespace ";
-  header += projectName;
-  header += " {\n}\n\n"
-            "#endif  // !"
-            + projectNameUpper + "_HPP\n";
-  return header;
+  return fmt::format(
+    "#ifndef {}_HPP\n"
+    "#define {}_HPP\n\n"
+    "namespace {} {{\n}}\n\n"
+    "#endif  // !{}_HPP\n",
+    projectNameUpper,
+    projectNameUpper,
+    projectName,
+    projectNameUpper
+  );
 }
 
 static std::string
 getModuleInterface(const std::string_view projectName) noexcept {
-  std::string moduleInterface = "export module ";
-  moduleInterface += projectName;
-  moduleInterface += ";\n\n"
-                     "export namespace ";
-  moduleInterface += projectName;
-  moduleInterface += " {\n}\n";
-  return moduleInterface;
+  return fmt::format(
+    "export module {};\n\n"
+    "export namespace {} {{\n}}\n",
+    projectName,
+    projectName
+  );
 }
 
 static Result<void> writeToFile(std::ofstream& ofs, const fs::path& fpath,
@@ -114,13 +115,13 @@ static Result<void> createTemplateFiles(const bool isBin, const bool useModules,
   if (isBin) {
     fs::create_directories(projectName / fs::path("src"));
     Try(writeToFile(ofs, projectName / fs::path("cabin.toml"),
-                    createCabinToml(projectName)));
+                    createCabinToml(projectName, useModules)));
     Try(writeToFile(ofs, projectName / fs::path(".gitignore"), "/cabin-out"));
     Try(writeToFile(ofs, projectName / fs::path("src") / "main.cc",
                     useModules ? MAIN_MODULES_CC : MAIN_CC));
     Diag::info("Created", "binary (application) `{}` package", projectName);
     Try(writeToFile(ofs, projectName / fs::path("cabin.toml"),
-                    createCabinToml(projectName)));
+                    createCabinToml(projectName, useModules)));
     Try(writeToFile(ofs, projectName / fs::path(".gitignore"),
                     "/cabin-out\ncabin.lock"));
   } else {

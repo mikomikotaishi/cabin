@@ -8,6 +8,6 @@
 namespace cabin {
 
 extern const Subcmd NEW_CMD;
-std::string createCabinToml(std::string_view projectName) noexcept;
+std::string createCabinToml(std::string_view projectName, bool useModules = false) noexcept;
 
 } // namespace cabin
