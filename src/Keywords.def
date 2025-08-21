@@ -112,6 +112,10 @@ DEFKEYWORD(transaction_safe)
 DEFKEYWORD(transaction_safe_dynamic)
 DEFKEYWORD(import)
 DEFKEYWORD(module)
+DEFKEYWORD(pre)
+DEFKEYWORD(post)
+DEFKEYWORD(trivially_relocatable_if_eligible)
+DEFKEYWORD(replaceable_if_eligible)
 
 DEFKEYWORD(posix)
 
@@ -134,6 +138,7 @@ DEFKEYWORD(defined)
 DEFKEYWORD(__has_include)
 DEFKEYWORD(__has_cpp_attribute)
 DEFKEYWORD(_Pragma)
+DEFKEYWORD(embed)
 
 #ifdef DEFKEYWORD_DEFAULTED
 #undef DEFKEYWORD
