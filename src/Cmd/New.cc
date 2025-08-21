@@ -120,19 +120,18 @@ static Result<void> createTemplateFiles(const bool isBin, const bool useModules,
     Try(writeToFile(ofs, projectName / fs::path("src") / "main.cc",
                     useModules ? MAIN_MODULES_CC : MAIN_CC));
     Diag::info("Created", "binary (application) `{}` package", projectName);
-    Try(writeToFile(ofs, projectName / fs::path("cabin.toml"),
-                    createCabinToml(projectName, useModules)));
-    Try(writeToFile(ofs, projectName / fs::path(".gitignore"),
-                    "/cabin-out\ncabin.lock"));
   } else {
-    fs::create_directories(projectName / fs::path("include") / projectName);
     if (useModules) {
       fs::create_directories(projectName / fs::path("src"));
       Try(writeToFile(
           ofs, (projectName / fs::path("src") / projectName).string() + ".cppm",
           getModuleInterface(projectName)));
-
     } else {
+      fs::create_directories(projectName / fs::path("include") / projectName);
+      Try(writeToFile(ofs, projectName / fs::path("cabin.toml"),
+                      createCabinToml(projectName, useModules)));
+      Try(writeToFile(ofs, projectName / fs::path(".gitignore"),
+                      "/cabin-out\ncabin.lock"));
       Try(writeToFile(
           ofs,
           (projectName / fs::path("include") / projectName / projectName)
