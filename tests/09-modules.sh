@@ -5,7 +5,19 @@ test_description='Test the modules functionality'
 WHEREAMI=$(dirname "$(realpath "$0")")
 . $WHEREAMI/setup.sh
 
-test_expect_success 'cabin new bin with modules' '
+test_expect_success 'check compiler supports modules' '
+    OUT=$(mktemp -d) &&
+    test_when_finished "rm -rf $OUT" &&
+    cd $OUT &&
+    if "$CABIN" new --modules modules_test_support 2>/dev/null; then
+        test_set_prereq MODULES_SUPPORTED
+    else
+        skip_all="Compiler does not support C++23 modules (GCC 14+ or Clang 17+ required)"
+        test_done
+    fi
+'
+
+test_expect_success MODULES_SUPPORTED 'cabin new bin with modules' '
     OUT=$(mktemp -d) &&
     test_when_finished "rm -rf $OUT" &&
     cd $OUT &&
@@ -28,7 +40,7 @@ EOF
     test_cmp expected actual
 '
 
-test_expect_success 'cabin new lib with modules' '
+test_expect_success MODULES_SUPPORTED 'cabin new lib with modules' '
     OUT=$(mktemp -d) &&
     test_when_finished "rm -rf $OUT" &&
     cd $OUT &&
@@ -47,7 +59,7 @@ EOF
     test_cmp expected actual
 '
 
-test_expect_success 'cabin new with short modules flag -m' '
+test_expect_success MODULES_SUPPORTED 'cabin new with short modules flag -m' '
     OUT=$(mktemp -d) &&
     test_when_finished "rm -rf $OUT" &&
     cd $OUT &&
@@ -64,7 +76,7 @@ EOF
     test_cmp expected actual
 '
 
-test_expect_success 'modules project builds successfully' '
+test_expect_success MODULES_SUPPORTED 'modules project builds successfully' '
     OUT=$(mktemp -d) &&
     test_when_finished "rm -rf $OUT" &&
     cd $OUT &&
@@ -76,7 +88,7 @@ test_expect_success 'modules project builds successfully' '
     grep "Hello, world!" run_output
 '
 
-test_expect_success 'modules library structure is correct' '
+test_expect_success MODULES_SUPPORTED 'modules library structure is correct' '
     OUT=$(mktemp -d) &&
     test_when_finished "rm -rf $OUT" &&
     cd $OUT &&

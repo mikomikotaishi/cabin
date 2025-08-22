@@ -676,11 +676,11 @@ Result<void> BuildConfig::configureBuild() {
     fs::create_directories(outBasePath);
   }
 
-  setVariables();
-
   if (project.manifest.package.modules) {
     Try(configureModuleSupport());
   }
+
+  setVariables();
 
   std::unordered_set<std::string> all = {};
   if (hasBinaryTarget) {
@@ -713,7 +713,7 @@ Result<void> BuildConfig::configureBuild() {
           sourceFilePath.string());
     }
 
-    srcs += ' ' + sourceFilePath.string();
+    srcs += fmt::format(" {}", sourceFilePath.string());
   }
 
   defineSimpleVar("SRCS", srcs);
@@ -723,7 +723,25 @@ Result<void> BuildConfig::configureBuild() {
       Try(processSources(sourceFilePaths));
 
   if (hasBinaryTarget) {
-    const std::vector<std::string> commands = { LINK_BIN_COMMAND };
+    std::vector<std::string> commands;
+
+    if (project.manifest.package.modules) {
+      const std::string& cxx = compiler.cxx;
+      bool isClang = cxx.find("clang") != std::string::npos;
+
+      if (isClang) {
+        const std::string stdPcmPath =
+            (project.buildOutPath / "std.pcm").string();
+        commands.emplace_back(fmt::format(
+            "$(CXX) $(LDFLAGS) -fmodule-file=std={} {} $^ $(LIBS) -o $@",
+            stdPcmPath, stdPcmPath));
+      } else {
+        commands.emplace_back(LINK_BIN_COMMAND);
+      }
+    } else {
+      commands.emplace_back(LINK_BIN_COMMAND);
+    }
+
     defineOutputTarget(buildObjTargets, project.buildOutPath / "main.o",
                        commands, outBasePath / project.manifest.package.name);
   }
@@ -778,9 +796,20 @@ void BuildConfig::enableCoverage() {
 }
 
 Result<void> BuildConfig::configureModuleSupport() {
+  const bool supportsModules = Try(compiler.supportsModules());
+  if (!supportsModules) {
+    const std::string errorMsg =
+        fmt::format("C++23 modules are not supported by this compiler. "
+                    "Required: GCC 14+ or Clang 17+. "
+                    "Current compiler: {}",
+                    compiler.cxx);
+    return Err(anyhow::anyhow(errorMsg));
+  }
+
   const std::string& cxx = compiler.cxx;
-  bool isGcc = cxx.find("gcc") != std::string::npos
-               || cxx.find("g++") != std::string::npos;
+  bool isGcc = (cxx.find("gcc") != std::string::npos
+                || cxx.find("g++") != std::string::npos)
+               && cxx.find("clang") == std::string::npos;
   bool isClang = cxx.find("clang") != std::string::npos;
 
   if (isGcc) {
@@ -789,29 +818,37 @@ Result<void> BuildConfig::configureModuleSupport() {
     const std::string gcmCacheDir =
         (project.buildOutPath / "gcm.cache").string();
 
-    defineTarget(gcmCacheDir, { "@mkdir -p " + gcmCacheDir }, {});
+    defineTarget(gcmCacheDir, { fmt::format("@mkdir -p {}", gcmCacheDir) }, {});
 
-    defineTarget(stdModulePath,
-                 { "$(CXX) $(CXXFLAGS) -fsearch-include-path -c bits/std.cc -o "
-                   + stdModulePath },
-                 { gcmCacheDir });
+    defineTarget(
+        stdModulePath,
+        { fmt::format(
+            "$(CXX) $(CXXFLAGS) -fsearch-include-path -c bits/std.cc -o {}",
+            stdModulePath) },
+        { gcmCacheDir });
 
     addPhony("std-module");
     defineTarget("std-module", {}, { stdModulePath });
 
   } else if (isClang) {
+    project.compilerOpts.cFlags.others.emplace_back("-stdlib=libc++");
+    project.compilerOpts.cFlags.others.emplace_back("-Wno-reserved-identifier");
+    project.compilerOpts.cFlags.others.emplace_back(
+        "-Wno-reserved-module-identifier");
+
+    project.compilerOpts.ldFlags.others.emplace_back("-stdlib=libc++");
+
     const std::string stdPcmPath = (project.buildOutPath / "std.pcm").string();
 
-    defineTarget(
-        stdPcmPath,
-        { "$(CXX) $(CXXFLAGS) -stdlib=libc++ --precompile -o " + stdPcmPath
-          + " /usr/lib/clang/*/include/c++/v1/std.cppm || echo 'Warning: "
-            "std.cppm not found, module support may be limited'" },
-        {});
+    defineTarget(stdPcmPath,
+                 { fmt::format("@mkdir -p $(@D) && "
+                               "$(CXX) $(CXXFLAGS) --precompile -o {} "
+                               "/usr/share/libc++/v1/std.cppm",
+                               stdPcmPath) },
+                 {});
 
-    project.compilerOpts.cFlags.others.emplace_back("-fmodule-file=std="
-                                                    + stdPcmPath);
-    project.compilerOpts.cFlags.others.emplace_back("-stdlib=libc++");
+    project.compilerOpts.cFlags.others.emplace_back(
+        fmt::format("-fmodule-file=std={}", stdPcmPath));
 
     addPhony("std-module");
     defineTarget("std-module", {}, { stdPcmPath });
@@ -902,7 +939,7 @@ Command getMakeCommand() {
 
   const std::size_t numThreads = getParallelism();
   if (numThreads > 1) {
-    makeCommand.addArg("-j" + std::to_string(numThreads));
+    makeCommand.addArg(fmt::format("-j{}", std::to_string(numThreads)));
   }
 
   return makeCommand;
