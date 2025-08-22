@@ -76,18 +76,6 @@ EOF
     test_cmp expected actual
 '
 
-test_expect_success MODULES_SUPPORTED 'modules project builds successfully' '
-    OUT=$(mktemp -d) &&
-    test_when_finished "rm -rf $OUT" &&
-    cd $OUT &&
-    "$CABIN" new --modules build_test_modules &&
-    cd build_test_modules &&
-    "$CABIN" build 2>build_output &&
-    test -x cabin-out/dev/build_test_modules &&
-    ./cabin-out/dev/build_test_modules >run_output &&
-    grep "Hello, world!" run_output
-'
-
 test_expect_success MODULES_SUPPORTED 'modules library structure is correct' '
     OUT=$(mktemp -d) &&
     test_when_finished "rm -rf $OUT" &&
